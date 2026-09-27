@@ -1,0 +1,41 @@
+name: build
+
+on:
+  schedule:
+    - cron: "17 18 * * *"  # 毎日 03:17 JST。毎時 0 分は混んで遅れるのでずらす
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+  actions: write  # 下の keepalive 用
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      TZ: Asia/Tokyo
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: sudo apt-get install -y fonts-noto-cjk && pip install pillow
+      - run: python build.py
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4
+      # 公開リポジトリは 60 日コミットが無いと定期実行が止まる。有効化 API を叩いて期限を延ばす
+      - run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/build.yml/enable"
+        env:
+          GH_TOKEN: ${{ github.token }}
